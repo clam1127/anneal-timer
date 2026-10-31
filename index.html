@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="어닐타이머">
+<meta name="theme-color" content="#0d1014">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<title>어닐타이머</title>
+<style>
+  :root {
+    --bg: #0d1014; --panel: #171b21; --line: #262c35; --text: #eef1f5; --dim: #8a93a0;
+    --accent: #ff8a2a; --accent2: #ffb36b; --ok: #3ccf8e; --warn: #ffd43b; --danger: #ff4d4d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", sans-serif;
+    -webkit-user-select: none; user-select: none; overscroll-behavior: none;
+    padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px);
+    display: flex; flex-direction: column; max-width: 560px; margin: 0 auto;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 6px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: -0.3px; }
+  header h1 span { color: var(--accent); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 12px; background: var(--panel); display: grid; place-items: center; font-size: 18px; }
+  .status { display: flex; gap: 8px; font-size: 12px; color: var(--dim); padding-bottom: 10px; flex-wrap: wrap; }
+  .pill { padding: 4px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); }
+  .pill.on { color: var(--ok); border-color: #1f4d39; }
+  .pill.off { color: var(--warn); border-color: #5a4a14; }
+
+  /* Next-up hero */
+  .hero { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; margin-bottom: 12px; }
+  .hero .lbl { font-size: 13px; color: var(--dim); }
+  .hero .row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .hero .name { font-size: 28px; font-weight: 700; }
+  .hero .cd { font-size: 52px; font-weight: 700; letter-spacing: -1px; }
+  .hero .sub { font-size: 13px; color: var(--dim); margin-top: 2px; }
+  .hero.idle .cd { font-size: 22px; color: var(--dim); font-weight: 600; }
+
+  /* Duration chips */
+  .dur { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .dur .lbl { font-size: 13px; color: var(--dim); white-space: nowrap; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); font-size: 15px; white-space: nowrap; }
+  .chip.sel { background: var(--accent); border-color: var(--accent); color: #1a0d00; font-weight: 700; }
+
+  /* Start button */
+  .start {
+    width: 100%; border-radius: 22px; padding: 22px 0; margin-bottom: 14px;
+    background: linear-gradient(180deg, var(--accent2), var(--accent)); color: #1a0d00;
+    font-size: 26px; font-weight: 800; box-shadow: 0 6px 24px rgba(255,138,42,.25);
+    transition: transform .08s;
+  }
+  .start:active { transform: scale(.97); }
+  .start small { display: block; font-size: 14px; font-weight: 600; opacity: .75; margin-top: 2px; }
+
+  /* Sample list */
+  .list { flex: 1; display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
+  .card { position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+  .card .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); transition: width .25s linear; }
+  .card .nm { font-size: 22px; font-weight: 700; min-width: 50px; }
+  .card .nm input { width: 80px; font: inherit; color: inherit; background: #0d1014; border: 1px solid var(--accent); border-radius: 8px; padding: 2px 6px; }
+  .card .mid { flex: 1; min-width: 0; }
+  .card .times { font-size: 13px; color: var(--dim); }
+  .card .rem { font-size: 24px; font-weight: 700; }
+  .card .acts { display: flex; gap: 6px; }
+  .card .acts button { min-width: 44px; height: 40px; border-radius: 10px; background: #20262e; font-size: 14px; color: var(--dim); }
+  .card.soon .rem { color: var(--warn); }
+  .card.done { opacity: .5; }
+  .card.done .rem { color: var(--ok); font-size: 18px; }
+  .card.done .bar { background: var(--ok); }
+  .empty { text-align: center; color: var(--dim); font-size: 14px; padding: 28px 0; line-height: 1.6; }
+
+  .foot { display: flex; gap: 8px; }
+  .foot button { flex: 1; padding: 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; color: var(--dim); }
+  .foot button.arm { background: #3a1414; border-color: var(--danger); color: #ffb3b3; }
+
+  /* Settings sheet */
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 20; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; background: #151a20; border-radius: 22px 22px 0 0; padding: 18px 18px calc(env(safe-area-inset-bottom) + 18px); z-index: 21; transform: translateY(105%); transition: transform .22s; }
+  .sheet.open { transform: none; }
+  .sheet h2 { margin: 0 0 12px; font-size: 18px; }
+  .set-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); gap: 10px; }
+  .set-row .t { font-size: 15px; }
+  .set-row .d { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .stepper { display: flex; align-items: center; gap: 4px; }
+  .stepper button { width: 38px; height: 38px; border-radius: 10px; background: #222932; font-size: 20px; }
+  .stepper span { min-width: 54px; text-align: center; font-weight: 700; }
+  .toggle { width: 52px; height: 32px; border-radius: 16px; background: #333b46; position: relative; transition: background .15s; flex: none; }
+  .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .toggle.on { background: var(--ok); }
+  .toggle.on::after { left: 23px; }
+  .sheet .test { margin-top: 14px; width: 100%; padding: 14px; border-radius: 14px; background: var(--accent); color: #1a0d00; font-weight: 700; font-size: 16px; }
+  .sheet .note { font-size: 12px; color: var(--dim); line-height: 1.55; margin-top: 12px; }
+
+  /* Alarm overlay */
+  .alarm { position: fixed; inset: 0; z-index: 70; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #000; }
+  .alarm.show { display: flex; }
+  .alarm.flash { background: var(--danger); }
+  .alarm.flash2 { background: var(--warn); }
+  .alarm .big { font-size: 120px; font-weight: 900; letter-spacing: -3px; line-height: 1; color: #fff; }
+  .alarm.flash2 .big, .alarm.flash2 .msg { color: #1a1200; }
+  .alarm .msg { font-size: 30px; font-weight: 800; color: #fff; margin-top: 10px; }
+  .alarm .more { font-size: 16px; color: rgba(255,255,255,.8); margin-top: 18px; }
+  .alarm.flash2 .more { color: rgba(0,0,0,.6); }
+  .alarm .tapclose { position: absolute; bottom: calc(env(safe-area-inset-bottom) + 24px); font-size: 13px; color: rgba(255,255,255,.55); }
+  .alarm.flash2 .tapclose { color: rgba(0,0,0,.5); }
+
+  /* First-tap unlock (iOS needs a gesture before sound) */
+  .unlock { position: fixed; inset: 0; z-index: 60; background: rgba(13,16,20,.96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px; }
+  .unlock b { font-size: 22px; }
+  .unlock p { color: var(--dim); font-size: 14px; margin: 0; line-height: 1.6; }
+  .unlock button { margin-top: 8px; padding: 16px 40px; border-radius: 18px; background: var(--accent); color: #1a0d00; font-weight: 800; font-size: 18px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>어닐<span>타이머</span></h1>
+  <button class="icon-btn" id="btnSettings" aria-label="설정">⚙︎</button>
+</header>
+<div class="status">
+  <span class="pill" id="pillWake">화면 유지 …</span>
+  <span class="pill" id="pillSound">소리 …</span>
+</div>
+
+<section class="hero idle" id="hero">
+  <div class="lbl" id="heroLbl">다음 완료</div>
+  <div class="row">
+    <div class="name" id="heroName"></div>
+    <div class="cd num" id="heroCd">대기 중</div>
+  </div>
+  <div class="sub num" id="heroSub">아래 버튼을 누르면 어닐링 시작</div>
+</section>
+
+<div class="dur">
+  <span class="lbl">어닐 시간</span>
+  <div class="chips" id="chips"></div>
+</div>
+
+<button class="start" id="btnStart">＋ S1 시작<small id="startSub">15분 → 완료 --:--</small></button>
+
+<section class="list" id="list"></section>
+
+<div class="foot">
+  <button id="btnClearDone">완료 항목 지우기</button>
+  <button id="btnReset">전체 초기화</button>
+</div>
+
+<!-- Settings -->
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet">
+  <h2>설정</h2>
+  <div class="set-row">
+    <div><div class="t">기본 어닐 시간</div><div class="d">새로 시작하는 샘플에 적용</div></div>
+    <div class="stepper"><button data-step="dur" data-d="-1">−</button><span class="num" id="vDur"></span><button data-step="dur" data-d="1">＋</button></div>
+  </div>
+  <div class="set-row">
+    <div><div class="t">알람 횟수</div><div class="d">강하게 울린 뒤 자동으로 꺼짐</div></div>
+    <div class="stepper"><button data-step="pulses" data-d="-1">−</button><span class="num" id="vPulses"></span><button data-step="pulses" data-d="1">＋</button></div>
+  </div>
+  <div class="set-row">
+    <div><div class="t">1분 전 예고음</div><div class="d">짧은 '띵' 한 번</div></div>
+    <button class="toggle" id="tgPre"></button>
+  </div>
+  <div class="set-row">
+    <div><div class="t">소리</div><div class="d">무음 스위치와 상관없이 재생 (iOS 17+)</div></div>
+    <button class="toggle" id="tgSound"></button>
+  </div>
+  <button class="test" id="btnTest">알람 테스트</button>
+  <div class="note">
+    ※ 웹앱이라 <b>화면이 켜져 있고 이 앱이 앞에 떠 있을 때</b>만 알람이 울립니다.
+    화면 유지는 자동으로 켜지지만, 잠금 버튼을 누르거나 다른 앱으로 가면 멈춥니다.
+    다시 돌아오면 그 사이 끝난 샘플을 바로 알려 줍니다. 미디어 볼륨을 크게 올려 두세요.
+  </div>
+</div>
+
+<div class="alarm" id="alarm">
+  <div class="big" id="alarmName">S1</div>
+  <div class="msg">어닐 완료 · 꺼내세요</div>
+  <div class="more num" id="alarmMore"></div>
+  <div class="tapclose">탭하면 닫힘 · 자동으로 사라집니다</div>
+</div>
+
+<div class="unlock" id="unlock">
+  <b>어닐타이머</b>
+  <p>iPhone은 한 번 터치해야 소리를 낼 수 있어요.<br>시작 전에 한 번만 눌러 주세요.</p>
+  <button id="btnUnlock">준비 완료</button>
+</div>
+
+<script>
+(() => {
+  const KEY = 'annealTimer.v1';
+  const DUR_CHIPS = [5, 10, 15, 20, 30, 60];
+  const PULSE_MS = 2200;          // one strong pulse (flash + beeps) per this period
+  const SOON_MS = 60 * 1000;
+
+  // ---------- state ----------
+  const defaults = { durMin: 15, pulses: 3, pre: true, sound: true, counter: 0, samples: [] };
+  let S = load();
+  function load() {
+    try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY) || '{}')); }
+    catch { return { ...defaults }; }
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, '0');
+  const hm = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const hms = t => { const d = new Date(t); return `${hm(t)}:${pad(d.getSeconds())}`; };
+  function fmtRem(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+    return h ? `${h}:${pad(m)}:${pad(ss)}` : `${pad(m)}:${pad(ss)}`;
+  }
+
+  // ---------- audio ----------
+  let ctx = null;
+  function initAudio() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) ctx = new AC();
+    }
+    if (ctx && ctx.state !== 'running') ctx.resume();
+    // play a silent blip so iOS fully unlocks the output
+    if (ctx) tone(0, 0.02, 440, 0.0001);
+    updatePills();
+  }
+  function tone(at, len, freq, vol = 0.5, type = 'square') {
+    if (!ctx) return;
+    const t0 = ctx.currentTime + at;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.008);
+    g.gain.setValueAtTime(vol, t0 + len - 0.02);
+    g.gain.linearRampToValueAtTime(0, t0 + len);
+    o.connect(g).connect(ctx.destination);
+    o.start(t0); o.stop(t0 + len + 0.02);
+  }
+  function burst() {          // one strong pulse: 4 rapid high beeps
+    if (!S.sound || !ctx) return;
+    if (ctx.state !== 'running') ctx.resume();
+    for (let i = 0; i < 4; i++) tone(i * 0.16, 0.11, i % 2 ? 1760 : 1320, 0.55);
+  }
+  function ding() {
+    if (!S.sound || !ctx) return;
+    if (ctx.state !== 'running') ctx.resume();
+    tone(0, 0.35, 988, 0.3, 'sine');
+  }
+
+  // ---------- wake lock ----------
+  let wake = null;
+  async function keepAwake() {
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') { updatePills(); return; }
+    try {
+      if (!wake || wake.released) {
+        wake = await navigator.wakeLock.request('screen');
+        wake.addEventListener('release', updatePills);
+      }
+    } catch { wake = null; }
+    updatePills();
+  }
+  function updatePills() {
+    const w = $('pillWake'), s = $('pillSound');
+    const wOn = wake && !wake.released;
+    w.textContent = wOn ? '☀︎ 화면 유지 중' : ('wakeLock' in navigator ? '화면 유지 꺼짐' : '화면 유지 미지원');
+    w.className = 'pill ' + (wOn ? 'on' : 'off');
+    const sOn = S.sound && ctx && ctx.state === 'running';
+    s.textContent = !S.sound ? '🔇 소리 끔' : (sOn ? '🔊 소리 준비됨' : '🔈 소리 대기');
+    s.className = 'pill ' + (sOn ? 'on' : 'off');
+  }
+
+  // ---------- samples ----------
+  function startSample() {
+    initAudio(); keepAwake();
+    const now = Date.now();
+    S.counter += 1;
+    S.samples.push({ id: now + Math.random(), name: 'S' + S.counter, start: now,
+                     end: now + S.durMin * 60000, preDone: false, alerted: false });
+    save(); render();
+  }
+  function nextName() { return 'S' + (S.counter + 1); }
+
+  // ---------- alarm queue ----------
+  const queue = [];
+  let alarmTimer = null, alarmPulse = 0;
+  function enqueueAlarm(sample, late) {
+    queue.push({ name: sample.name, late });
+    if (!alarmTimer) runAlarm();
+  }
+  function runAlarm() {
+    const a = queue.shift();
+    if (!a) { hideAlarm(); return; }
+    const el = $('alarm');
+    $('alarmName').textContent = a.name;
+    $('alarmMore').textContent = a.late ? `${hm(a.late)}에 이미 끝났어요` :
+      (queue.length ? `다음 대기: ${queue.map(q => q.name).join(', ')}` : '');
+    el.classList.add('show');
+    alarmPulse = 0;
+    pulse();
+    alarmTimer = setInterval(pulse, PULSE_MS);
+  }
+  function pulse() {
+    const el = $('alarm');
+    if (alarmPulse >= S.pulses) {          // finished this sample -> next or hide
+      clearInterval(alarmTimer); alarmTimer = null;
+      el.classList.remove('flash', 'flash2');
+      if (queue.length) runAlarm(); else hideAlarm();
+      return;
+    }
+    alarmPulse++;
+    burst();
+    // strobe: red / yellow / red during the beeps, then dim
+    const steps = ['flash', 'flash2', 'flash', 'flash2', 'flash'];
+    steps.forEach((c, i) => setTimeout(() => {
+      el.classList.remove('flash', 'flash2'); el.classList.add(c);
+    }, i * 160));
+    setTimeout(() => el.classList.remove('flash', 'flash2'), steps.length * 160 + 500);
+  }
+  function hideAlarm() {
+    clearInterval(alarmTimer); alarmTimer = null;
+    $('alarm').classList.remove('show', 'flash', 'flash2');
+  }
+  $('alarm').addEventListener('click', () => {   // tap = skip current
+    unlock();
+    clearInterval(alarmTimer); alarmTimer = null;
+    $('alarm').classList.remove('flash', 'flash2');
+    if (queue.length) runAlarm(); else hideAlarm();
+  });
+
+  // ---------- tick ----------
+  function tick() {
+    const now = Date.now();
+    let changed = false;
+    // ended samples, oldest first
+    const due = S.samples.filter(s => !s.alerted && s.end <= now).sort((a, b) => a.end - b.end);
+    for (const s of due) {
+      s.alerted = true; changed = true;
+      const late = now - s.end > 5000 ? s.end : 0;   // missed while app was asleep
+      enqueueAlarm(s, late);
+    }
+    if (S.pre) for (const s of S.samples) {
+      if (!s.preDone && !s.alerted && s.end - now <= SOON_MS && s.end - now > 0) {
+        s.preDone = true; changed = true;
+        if (s.end - s.start > SOON_MS * 1.5) ding();
+      }
+    }
+    if (changed) save();
+    if (due.length && editing === null) render(); else renderLive(now);
+  }
+
+  // ---------- render ----------
+  let editing = null;
+  function render() {
+    // chips
+    const chips = $('chips'); chips.innerHTML = '';
+    const set = new Set(DUR_CHIPS); set.add(S.durMin);
+    [...set].sort((a, b) => a - b).forEach(m => {
+      const b = document.createElement('button');
+      b.className = 'chip' + (m === S.durMin ? ' sel' : '');
+      b.textContent = m + '분';
+      b.onclick = () => { S.durMin = m; save(); render(); };
+      chips.appendChild(b);
+    });
+    $('vDur').textContent = S.durMin + '분';
+    $('vPulses').textContent = S.pulses + '회';
+    $('tgPre').classList.toggle('on', S.pre);
+    $('tgSound').classList.toggle('on', S.sound);
+
+    // list: running sorted by end, then done (latest first)
+    const list = $('list'); list.innerHTML = '';
+    const running = S.samples.filter(s => !s.alerted).sort((a, b) => a.end - b.end);
+    const done = S.samples.filter(s => s.alerted).sort((a, b) => b.end - a.end);
+    if (!S.samples.length) {
+      list.innerHTML = '<div class="empty">스핀코팅 끝나고 핫플레이트에 올리면<br><b>＋ 시작</b>을 누르세요. 샘플마다 따로 시간을 잽니다.</div>';
+    }
+    for (const s of [...running, ...done]) {
+      const c = document.createElement('div');
+      c.className = 'card'; c.dataset.id = s.id;
+      const nm = document.createElement('div'); nm.className = 'nm';
+      if (editing === s.id) {
+        const inp = document.createElement('input'); inp.value = s.name; inp.maxLength = 8;
+        const commit = () => { s.name = inp.value.trim() || s.name; editing = null; save(); render(); };
+        inp.onblur = commit;
+        inp.onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) inp.blur(); };
+        nm.appendChild(inp); setTimeout(() => { inp.focus(); inp.select(); }, 0);
+      } else {
+        nm.textContent = s.name;
+        nm.onclick = () => { editing = s.id; render(); };
+      }
+      c.appendChild(nm);
+      const mid = document.createElement('div'); mid.className = 'mid';
+      mid.innerHTML = `<div class="rem num"></div><div class="times num">${hm(s.start)} → ${hm(s.end)} · ${Math.round((s.end - s.start) / 60000)}분</div>`;
+      c.appendChild(mid);
+      const acts = document.createElement('div'); acts.className = 'acts';
+      if (!s.alerted) {
+        const plus = document.createElement('button'); plus.textContent = '+1분';
+        plus.onclick = () => { s.end += 60000; s.preDone = false; save(); render(); };
+        acts.appendChild(plus);
+      }
+      const del = document.createElement('button'); del.textContent = '✕';
+      del.onclick = () => armed(del, () => { S.samples = S.samples.filter(x => x !== s); save(); render(); });
+      acts.appendChild(del);
+      c.appendChild(acts);
+      const bar = document.createElement('div'); bar.className = 'bar'; c.appendChild(bar);
+      list.appendChild(c);
+    }
+    renderLive(Date.now());
+  }
+
+  function renderLive(now) {
+    // start button
+    $('btnStart').firstChild.textContent = `＋ ${nextName()} 시작`;
+    $('startSub').textContent = `${S.durMin}분 → 완료 ${hm(now + S.durMin * 60000)}`;
+
+    // hero
+    const running = S.samples.filter(s => !s.alerted).sort((a, b) => a.end - b.end);
+    const hero = $('hero');
+    if (running.length) {
+      const n = running[0];
+      hero.classList.remove('idle');
+      $('heroLbl').textContent = running.length > 1 ? `다음 완료 · 진행 중 ${running.length}개` : '다음 완료';
+      $('heroName').textContent = n.name;
+      $('heroCd').textContent = fmtRem(n.end - now);
+      $('heroSub').textContent = `${hms(n.end)}에 완료` + (running[1] ? ` · 그다음 ${running[1].name} ${hm(running[1].end)}` : '');
+    } else {
+      hero.classList.add('idle');
+      $('heroLbl').textContent = '다음 완료';
+      $('heroName').textContent = '';
+      $('heroCd').textContent = '대기 중';
+      $('heroSub').textContent = S.samples.length ? '진행 중인 샘플이 없습니다' : '아래 버튼을 누르면 어닐링 시작';
+    }
+
+    // cards
+    for (const c of $('list').querySelectorAll('.card')) {
+      const s = S.samples.find(x => String(x.id) === c.dataset.id);
+      if (!s) continue;
+      const rem = s.end - now, total = s.end - s.start;
+      c.classList.toggle('done', s.alerted);
+      c.classList.toggle('soon', !s.alerted && rem <= SOON_MS);
+      c.querySelector('.rem').textContent = s.alerted ? `완료 ${hm(s.end)}` : fmtRem(rem);
+      c.querySelector('.bar').style.width = (s.alerted ? 100 : Math.min(100, Math.max(0, (1 - rem / total) * 100))) + '%';
+    }
+  }
+
+  // two-tap confirm (window.confirm is unreliable in home-screen web apps)
+  function armed(btn, fn) {
+    if (btn.classList.contains('arm')) { fn(); return; }
+    const old = btn.textContent;
+    btn.classList.add('arm'); btn.textContent = btn.textContent.length > 2 ? '한 번 더 누르면 실행' : '삭제?';
+    setTimeout(() => { if (btn.isConnected) { btn.classList.remove('arm'); btn.textContent = old; } }, 2500);
+  }
+
+  // ---------- wiring ----------
+  $('btnStart').onclick = startSample;
+  $('btnClearDone').onclick = () => { S.samples = S.samples.filter(s => !s.alerted); save(); render(); };
+  $('btnReset').onclick = e => armed(e.currentTarget, () => {
+    S.samples = []; S.counter = 0; queue.length = 0; hideAlarm(); save(); render();
+    $('btnReset').classList.remove('arm'); $('btnReset').textContent = '전체 초기화';
+  });
+
+  const openSheet = o => { $('sheet').classList.toggle('open', o); $('sheetBg').style.display = o ? 'block' : 'none'; };
+  $('btnSettings').onclick = () => openSheet(true);
+  $('sheetBg').onclick = () => openSheet(false);
+  document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
+    const d = +b.dataset.d;
+    if (b.dataset.step === 'dur') S.durMin = Math.min(180, Math.max(1, S.durMin + d));
+    else S.pulses = Math.min(6, Math.max(1, S.pulses + d));
+    save(); render();
+  });
+  $('tgPre').onclick = () => { S.pre = !S.pre; save(); render(); };
+  $('tgSound').onclick = () => { S.sound = !S.sound; save(); render(); updatePills(); };
+  $('btnTest').onclick = () => { initAudio(); openSheet(false); enqueueAlarm({ name: '테스트' }, 0); };
+
+  function unlock() { initAudio(); keepAwake(); $('unlock').style.display = 'none'; }
+  $('btnUnlock').onclick = unlock;
+  // any tap re-arms audio/wake lock (iOS drops them after backgrounding)
+  document.addEventListener('touchend', () => { if (ctx && ctx.state !== 'running') ctx.resume(); keepAwake(); }, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { keepAwake(); tick(); }
+  });
+
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  render();
+  updatePills();
+  setInterval(tick, 250);
+  setInterval(updatePills, 2000);
+})();
+</script>
+</body>
+</html>

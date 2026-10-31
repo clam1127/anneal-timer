@@ -1,0 +1,10 @@
+{
+  "name": "어닐타이머",
+  "short_name": "어닐타이머",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d1014",
+  "theme_color": "#0d1014",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
+}
