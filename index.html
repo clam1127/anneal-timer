@@ -63,6 +63,21 @@
   .start:active { transform: scale(.97); }
   .start small { display: block; font-size: 14px; font-weight: 600; opacity: .75; margin-top: 2px; }
 
+  /* Next-sample cue (teal, distinct from the red/yellow done alarm) */
+  :root { --cue: #2ee6d6; }
+  .cue { display: none; align-items: center; gap: 12px; margin-bottom: 12px; padding: 14px 16px; border-radius: 18px;
+         background: #0c2f2d; border: 2px solid var(--cue); color: var(--cue); }
+  .cue.show { display: flex; animation: cueIn .35s ease-out, cueGlow 1.2s ease-in-out infinite alternate; }
+  .cue .ic { font-size: 30px; }
+  .cue .tx { flex: 1; }
+  .cue .tx b { display: block; font-size: 22px; color: #eafffd; }
+  .cue .tx span { font-size: 13px; }
+  .cue .x { width: 36px; height: 36px; border-radius: 10px; background: rgba(46,230,214,.15); color: var(--cue); font-size: 16px; }
+  @keyframes cueIn { from { transform: translateY(-8px) scale(.97); opacity: 0; } }
+  @keyframes cueGlow { from { box-shadow: 0 0 0 rgba(46,230,214,0); } to { box-shadow: 0 0 26px rgba(46,230,214,.55); } }
+  .start.cueing { animation: startPulse .9s ease-in-out infinite alternate; }
+  @keyframes startPulse { to { box-shadow: 0 0 0 6px var(--cue), 0 0 34px rgba(46,230,214,.7); } }
+
   /* Sample list */
   .list { flex: 1; display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
   .card { position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
@@ -133,6 +148,12 @@
   <span class="pill" id="pillSound">소리 …</span>
 </div>
 
+<div class="cue" id="cue">
+  <div class="ic">🎵</div>
+  <div class="tx"><b id="cueTitle">S2 준비하세요</b><span class="num" id="cueSub"></span></div>
+  <button class="x" id="cueClose" aria-label="닫기">✕</button>
+</div>
+
 <section class="hero idle" id="hero">
   <div class="lbl" id="heroLbl">다음 완료</div>
   <div class="row">
@@ -169,6 +190,14 @@
     <div class="stepper"><button data-step="pulses" data-d="-1">−</button><span class="num" id="vPulses"></span><button data-step="pulses" data-d="1">＋</button></div>
   </div>
   <div class="set-row">
+    <div><div class="t">다음 샘플 알림</div><div class="d">시작 누르고 이 시간이 지나면 휘파람 + 배너</div></div>
+    <button class="toggle" id="tgCue"></button>
+  </div>
+  <div class="set-row">
+    <div><div class="t">다음 샘플 알림 시점</div><div class="d">마지막 시작 후 (샘플 간격보다 조금 짧게)</div></div>
+    <div class="stepper"><button data-step="cue" data-d="-10">−</button><span class="num" id="vCue"></span><button data-step="cue" data-d="10">＋</button></div>
+  </div>
+  <div class="set-row">
     <div><div class="t">1분 전 예고음</div><div class="d">짧은 '띵' 한 번</div></div>
     <button class="toggle" id="tgPre"></button>
   </div>
@@ -176,7 +205,8 @@
     <div><div class="t">소리</div><div class="d">무음 스위치와 상관없이 재생 (iOS 17+)</div></div>
     <button class="toggle" id="tgSound"></button>
   </div>
-  <button class="test" id="btnTest">알람 테스트</button>
+  <button class="test" id="btnTest">완료 알람 테스트</button>
+  <button class="test" id="btnTestCue" style="background: var(--cue)">휘파람 테스트</button>
   <div class="note">
     ※ 웹앱이라 <b>화면이 켜져 있고 이 앱이 앞에 떠 있을 때</b>만 알람이 울립니다.
     화면 유지는 자동으로 켜지지만, 잠금 버튼을 누르거나 다른 앱으로 가면 멈춥니다.
@@ -205,7 +235,9 @@
   const SOON_MS = 60 * 1000;
 
   // ---------- state ----------
-  const defaults = { durMin: 15, pulses: 3, pre: true, sound: true, counter: 0, samples: [] };
+  const CUE_WINDOW_MS = 30 * 1000;   // don't fire a stale cue when returning to the app much later
+  const defaults = { durMin: 15, pulses: 3, pre: true, sound: true, cue: true, cueSec: 70, cueFor: 0,
+                     counter: 0, samples: [] };
   let S = load();
   function load() {
     try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY) || '{}')); }
@@ -253,6 +285,28 @@
     if (ctx.state !== 'running') ctx.resume();
     for (let i = 0; i < 4; i++) tone(i * 0.16, 0.11, i % 2 ? 1760 : 1320, 0.55);
   }
+  function swoop(at, f0, f1, f2, len, vol = 0.45) {   // sine glide f0 -> f1 -> f2
+    const t0 = ctx.currentTime + at;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(f1, t0 + len * 0.45);
+    o.frequency.exponentialRampToValueAtTime(f2, t0 + len);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.04);
+    g.gain.setValueAtTime(vol, t0 + len - 0.06);
+    g.gain.linearRampToValueAtTime(0, t0 + len);
+    o.connect(g).connect(ctx.destination);
+    o.start(t0); o.stop(t0 + len + 0.02);
+  }
+  function whistle() {        // "휘-익 휘-이우" wolf whistle, twice
+    if (!S.sound || !ctx) return;
+    if (ctx.state !== 'running') ctx.resume();
+    for (const base of [0, 1.4]) {
+      swoop(base, 1100, 2700, 2500, 0.32);
+      swoop(base + 0.45, 1500, 2900, 1100, 0.6);
+    }
+  }
   function ding() {
     if (!S.sound || !ctx) return;
     if (ctx.state !== 'running') ctx.resume();
@@ -288,8 +342,24 @@
     S.counter += 1;
     S.samples.push({ id: now + Math.random(), name: 'S' + S.counter, start: now,
                      end: now + S.durMin * 60000, preDone: false, alerted: false });
+    hideCue();
     save(); render();
   }
+
+  // ---------- next-sample cue ----------
+  let cueShownAt = 0;
+  function lastStart() { return S.samples.reduce((m, s) => Math.max(m, s.start), 0); }
+  function showCue(fromName, since) {
+    $('cueTitle').textContent = `${nextName()} 준비하세요`;
+    $('cueSub').dataset.from = fromName; $('cueSub').dataset.since = since;
+    $('cue').classList.add('show'); $('btnStart').classList.add('cueing');
+    cueShownAt = Date.now();
+    whistle();
+  }
+  function hideCue() {
+    $('cue').classList.remove('show'); $('btnStart').classList.remove('cueing'); cueShownAt = 0;
+  }
+  $('cueClose').onclick = hideCue;
   function nextName() { return 'S' + (S.counter + 1); }
 
   // ---------- alarm queue ----------
@@ -356,6 +426,19 @@
         if (s.end - s.start > SOON_MS * 1.5) ding();
       }
     }
+    const ls = lastStart(), cueAt = ls + S.cueSec * 1000;
+    if (S.cue && ls && S.cueFor !== ls && now >= cueAt) {
+      S.cueFor = ls; changed = true;              // once per start
+      if (now - cueAt < CUE_WINDOW_MS) {
+        const from = S.samples.find(s => s.start === ls);
+        showCue(from ? from.name : '', ls);
+      }
+    }
+    if (cueShownAt) {
+      const since = +$('cueSub').dataset.since;
+      $('cueSub').textContent = `${$('cueSub').dataset.from} 시작 후 ${fmtRem(now - since)} 지남`;
+      if (now - cueShownAt > 90 * 1000) hideCue();   // nobody coming: stop nagging
+    }
     if (changed) save();
     if (due.length && editing === null) render(); else renderLive(now);
   }
@@ -375,6 +458,8 @@
     });
     $('vDur').textContent = S.durMin + '분';
     $('vPulses').textContent = S.pulses + '회';
+    $('vCue').textContent = fmtRem(S.cueSec * 1000).replace(/^0/, '');
+    $('tgCue').classList.toggle('on', S.cue);
     $('tgPre').classList.toggle('on', S.pre);
     $('tgSound').classList.toggle('on', S.sound);
 
@@ -476,10 +561,13 @@
   document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
     const d = +b.dataset.d;
     if (b.dataset.step === 'dur') S.durMin = Math.min(180, Math.max(1, S.durMin + d));
+    else if (b.dataset.step === 'cue') S.cueSec = Math.min(600, Math.max(20, S.cueSec + d));
     else S.pulses = Math.min(6, Math.max(1, S.pulses + d));
     save(); render();
   });
-  $('tgPre').onclick = () => { S.pre = !S.pre; save(); render(); };
+  $('tgCue').onclick = () => { S.cue = !S.cue; if (!S.cue) hideCue(); save(); render(); };
+  $('btnTestCue').onclick = () => { initAudio(); openSheet(false); showCue('S1', Date.now() - S.cueSec * 1000); };
+  $('tgPre').onclick =() => { S.pre = !S.pre; save(); render(); };
   $('tgSound').onclick = () => { S.sound = !S.sound; save(); render(); updatePills(); };
   $('btnTest').onclick = () => { initAudio(); openSheet(false); enqueueAlarm({ name: '테스트' }, 0); };
 
