@@ -35,6 +35,8 @@
   .pill { padding: 4px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); }
   .pill.on { color: var(--ok); border-color: #1f4d39; }
   .pill.off { color: var(--warn); border-color: #5a4a14; }
+  .pill.upd { font: inherit; font-size: 12px; color: #0d1014; background: var(--cue); border-color: var(--cue); font-weight: 700; }
+  .pill.upd[hidden] { display: none; }
 
   /* Next-up hero */
   .hero { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; margin-bottom: 12px; }
@@ -189,6 +191,7 @@
 <div class="status">
   <span class="pill" id="pillWake">화면 유지 …</span>
   <span class="pill" id="pillSound">소리 …</span>
+  <button class="pill upd" id="pillUpdate" hidden>⟳ 새 버전 · 탭해서 업데이트</button>
 </div>
 
 <div class="cue" id="cue">
@@ -264,6 +267,7 @@
     ※ 웹앱이라 <b>화면이 켜져 있고 이 앱이 앞에 떠 있을 때</b>만 알람이 울립니다.
     화면 유지는 자동으로 켜지지만, 잠금 버튼을 누르거나 다른 앱으로 가면 멈춥니다.
     다시 돌아오면 그 사이 끝난 샘플을 바로 알려 줍니다. 미디어 볼륨을 크게 올려 두세요.
+    <br>버전 <span class="num" id="appVer"></span>
   </div>
 </div>
 
@@ -291,6 +295,7 @@
 
 <script>
 (() => {
+  const APP_VERSION = '2026.11.20-2';   // bump on every deploy: the app compares it with the live copy
   const KEY = 'annealTimer.v1';
   const PULSE_MS = 2200;          // one strong pulse (flash + beeps) per this period
   const SOON_MS = 60 * 1000;
@@ -807,12 +812,30 @@
   // any tap re-arms audio/wake lock (iOS drops them after backgrounding)
   document.addEventListener('touchend', () => { if (ctx && ctx.state !== 'running') ctx.resume(); keepAwake(); }, { passive: true });
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { keepAwake(); tick(); }
+    if (document.visibilityState === 'visible') { keepAwake(); tick(); checkUpdate(); }
   });
 
-  if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+  // ---------- updates ----------
+  // A home-screen app that is only switched back to never reloads, so look for a newer copy
+  // ourselves and offer a one-tap reload (state lives in localStorage, so nothing is lost).
+  $('appVer').textContent = APP_VERSION;
+  let swReg = null;
+  async function checkUpdate() {
+    if (location.protocol !== 'https:') return;
+    try {
+      const html = await (await fetch('index.html?check=' + Date.now(), { cache: 'no-store' })).text();
+      const m = html.match(/APP_VERSION = '([^']+)'/);
+      $('pillUpdate').hidden = !m || m[1] === APP_VERSION;
+      if (swReg) swReg.update().catch(() => {});
+    } catch {}
   }
+  $('pillUpdate').onclick = () => location.reload();
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then(r => { swReg = r; }).catch(() => {});
+  }
+  checkUpdate();
+  setInterval(checkUpdate, 5 * 60 * 1000);
 
   render();
   updatePills();
