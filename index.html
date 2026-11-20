@@ -442,7 +442,8 @@
   }
   const active = () => S.samples.filter(s => s.phase !== 'done');
   // when this sample next needs attention (waiting ones first)
-  const dueAt = s => s.phase === 'wait' ? -Infinity : s.phase === 'pre' ? s.preEnd : s.end;
+  // (waiting ones get a big finite offset, not -Infinity: -Inf - -Inf is NaN and breaks sort)
+  const dueAt = s => s.phase === 'wait' ? s.preEnd - 1e13 : s.phase === 'pre' ? s.preEnd : s.end;
 
   // ---------- next-sample cue ----------
   let cueShownAt = 0;
@@ -674,7 +675,8 @@
     // hero: the sample that needs attention next
     const running = active().sort((a, b) => dueAt(a) - dueAt(b));
     const hero = $('hero');
-    hero.classList.toggle('waiting', running[0] && running[0].phase === 'wait');
+    // must be a real boolean: toggle(name, undefined) flips the class on every tick
+    hero.classList.toggle('waiting', !!running[0] && running[0].phase === 'wait');
     if (running.length) {
       const n = running[0], more = running.length > 1 ? ` · 진행 중 ${running.length}개` : '';
       const after = running[1] ? ` · 그다음 ${running[1].name}` + (running[1].phase === 'wait' ? ' 대기' : ` ${hm(dueAt(running[1]))}`) : '';
