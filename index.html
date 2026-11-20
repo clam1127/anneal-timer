@@ -295,7 +295,7 @@
 
 <script>
 (() => {
-  const APP_VERSION = '2026.11.20-2';   // bump on every deploy: the app compares it with the live copy
+  const APP_VERSION = '2026.11.20-3';   // bump on every deploy: the app compares it with the live copy
   const KEY = 'annealTimer.v1';
   const PULSE_MS = 2200;          // one strong pulse (flash + beeps) per this period
   const SOON_MS = 60 * 1000;
@@ -776,6 +776,7 @@
 
   const openSheet = o => {
     if (!o && document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if (o) window.scrollTo(0, 0);   // see fixIosOffset: keep fixed-sheet touches aligned
     $('sheet').classList.toggle('open', o); $('sheetBg').style.display = o ? 'block' : 'none';
   };
   $('btnSettings').onclick = () => openSheet(true);
@@ -795,6 +796,14 @@
       $(id).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) e.target.blur(); });
     }
   }
+  // iOS Safari: closing the keyboard leaves the page scrolled, and touches on fixed elements
+  // (the settings sheet) land a bit below what is drawn. Snap back once the keyboard is gone.
+  function fixIosOffset() {
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') return;   // keyboard still up
+    window.scrollTo(0, 0);
+  }
+  document.addEventListener('focusout', () => setTimeout(fixIosOffset, 60));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', () => setTimeout(fixIosOffset, 60));
   document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
     const d = +b.dataset.d;
     if (b.dataset.step === 'cue') S.cueSec = Math.min(600, Math.max(20, S.cueSec + d));
