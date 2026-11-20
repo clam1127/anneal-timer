@@ -108,6 +108,22 @@
   .card.done .bar { background: var(--ok); }
   .empty { text-align: center; color: var(--dim); font-size: 14px; padding: 28px 0; line-height: 1.6; }
 
+  .finish { width: 100%; margin-bottom: 8px; padding: 14px; border-radius: 14px; background: #10291f; border: 1px solid #1f6b4a; color: var(--ok); font-size: 16px; font-weight: 700; }
+  .finish.arm { background: var(--ok); border-color: var(--ok); color: #062014; }
+  .finish[hidden] { display: none; }
+  .finish.over { background: transparent; border-style: dashed; font-size: 14px; font-weight: 600; opacity: .75; }
+
+  .party { position: fixed; inset: 0; z-index: 65; display: none; flex-direction: column; align-items: center; justify-content: center;
+           text-align: center; background: radial-gradient(circle at 50% 40%, #1b4d38, #0d1014 70%); overflow: hidden; }
+  .party.show { display: flex; animation: cueIn .3s ease-out; }
+  .party .emoji { font-size: 96px; animation: pop .6s cubic-bezier(.2,1.6,.4,1); }
+  .party .title { font-size: 40px; font-weight: 900; margin-top: 8px; }
+  .party .sub { font-size: 16px; color: #b9f3d6; margin-top: 10px; line-height: 1.6; padding: 0 24px; }
+  .party .tapclose { position: absolute; bottom: calc(env(safe-area-inset-bottom) + 24px); font-size: 13px; color: rgba(255,255,255,.5); }
+  @keyframes pop { from { transform: scale(.2) rotate(-20deg); } }
+  .confetti i { position: absolute; top: -20px; width: 9px; height: 14px; border-radius: 2px; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
+
   .foot { display: flex; gap: 8px; }
   .foot button { flex: 1; padding: 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; color: var(--dim); }
   .foot button.arm { background: #3a1414; border-color: var(--danger); color: #ffb3b3; }
@@ -203,6 +219,8 @@
 
 <section class="list" id="list"></section>
 
+<button class="finish" id="btnFinish">🏁 샘플링 끝</button>
+
 <div class="foot">
   <button id="btnClearDone">완료 항목 지우기</button>
   <button id="btnReset">전체 초기화</button>
@@ -257,6 +275,14 @@
   <div class="tapclose" id="alarmHint">탭하면 닫힘 · 자동으로 사라집니다</div>
 </div>
 
+<div class="party" id="party">
+  <div class="confetti" id="confetti"></div>
+  <div class="emoji">🎉</div>
+  <div class="title">수고했어요!</div>
+  <div class="sub num" id="partySub"></div>
+  <div class="tapclose">탭하면 닫힘</div>
+</div>
+
 <div class="unlock" id="unlock">
   <b>어닐타이머</b>
   <p>iPhone은 한 번 터치해야 소리를 낼 수 있어요.<br>시작 전에 한 번만 눌러 주세요.</p>
@@ -273,7 +299,7 @@
 
   // ---------- state ----------
   // sample.phase: 'pre' (2 step, 40 °C) -> 'wait' (pre done, waiting for confirm) -> 'post' -> 'done'
-  const defaults = { mode: 1, preSec: 180, postSec: 900, pulses: 3, pre: true, sound: true,
+  const defaults = { mode: 1, preSec: 180, postSec: 900, pulses: 3, pre: true, sound: true, ended: false,
                      cue: true, cueSec: 70, cueFor: 0, counter: 0, samples: [] };
   let S = load();
   function load() {
@@ -360,6 +386,11 @@
       swoop(base + 0.45, 1500, 2900, 1100, 0.6);
     }
   }
+  function fanfare() {        // "따-따-따-딴! 따-딴!" for finishing the session
+    if (!soundOk()) return;
+    [[0, 523], [0.14, 659], [0.28, 784], [0.42, 1047, 0.4], [0.9, 784], [1.04, 1047, 0.7]]
+      .forEach(([at, f, len = 0.12]) => { tone(at, len, f, 0.4, 'triangle'); tone(at, len, f * 2, 0.12, 'sine'); });
+  }
   function ding() {
     if (!soundOk()) return;
     tone(0, 0.35, 988, 0.3, 'sine');
@@ -397,6 +428,7 @@
     if (S.mode === 2) Object.assign(s, { phase: 'pre', preEnd: now + S.preSec * 1000 });
     else Object.assign(s, { phase: 'post', postStart: now, end: now + S.postSec * 1000 });
     S.samples.push(s);
+    S.ended = false;           // a new start after "샘플링 끝" resumes the next-sample cue
     hideCue();
     save(); render();
   }
@@ -442,7 +474,8 @@
     el.classList.toggle('kpre', pre);
     $('alarmName').textContent = cur.name;
     $('alarmMsg').textContent = pre ? 'Pre 완료 · Post로 옮기세요' : '어닐 완료 · 꺼내세요';
-    $('alarmHint').textContent = pre ? '옮긴 뒤 버튼을 누르면 Post 타이머 시작' : '탭하면 닫힘 · 자동으로 사라집니다';
+    $('alarmHint').textContent = pre ? '옮긴 뒤 버튼을 눌러야 꺼집니다' : '탭하면 닫힘 · 자동으로 사라집니다';
+    $('alarmAct').textContent = `${cur.name} 옮겼어요 · Post 시작`;
     $('alarmMore').textContent = cur.late ? `${hm(cur.late)}에 이미 끝났어요` :
       (queue.length ? `다음 대기: ${queue.map(q => q.name).join(', ')}` : '');
     el.classList.add('show');
@@ -453,7 +486,29 @@
   function nextAlarm() {
     clearInterval(alarmTimer); alarmTimer = null;
     $('alarm').classList.remove('flash', 'flash2');
-    if (queue.length) runAlarm(); else hideAlarm();
+    if (queue.length) runAlarm(); else holdOrHide();
+  }
+  // A sample waiting to be moved to Post keeps the blue screen up until its button is pressed.
+  function holdOrHide() {
+    const w = S.samples.filter(s => s.phase === 'wait').sort((a, b) => a.preEnd - b.preEnd)[0];
+    if (!w) { hideAlarm(); return; }
+    const el = $('alarm');
+    cur = { kind: 'pre', id: w.id, name: w.name, held: true };
+    el.classList.add('show', 'kpre');
+    $('alarmName').textContent = w.name;
+    $('alarmMsg').textContent = 'Pre 완료 · Post로 옮기세요';
+    $('alarmHint').textContent = '옮긴 뒤 버튼을 눌러야 꺼집니다';
+    $('alarmAct').textContent = `${w.name} 옮겼어요 · Post 시작`;
+    const others = S.samples.filter(s => s.phase === 'wait' && s !== w).map(s => s.name);
+    $('alarmMore').textContent = others.length ? `대기 중: ${others.join(', ')}` : '';
+  }
+  function heldFlash() {   // reminder pulse on the held screen
+    const el = $('alarm');
+    chime();
+    ['flash', 'flash2', 'flash'].forEach((c, i) => setTimeout(() => {
+      el.classList.remove('flash', 'flash2'); el.classList.add(c);
+    }, i * 160));
+    setTimeout(() => el.classList.remove('flash', 'flash2'), 1000);
   }
   function pulse() {
     const el = $('alarm');
@@ -475,7 +530,10 @@
     for (let i = queue.length - 1; i >= 0; i--) if (queue[i].id === id && queue[i].kind === kind) queue.splice(i, 1);
     if (cur && cur.id === id && cur.kind === kind) nextAlarm();
   }
-  $('alarm').addEventListener('click', () => { unlock(); nextAlarm(); });   // tap = skip current
+  $('alarm').addEventListener('click', () => {   // tap = skip a done alarm; the move-to-Post one needs its button
+    unlock();
+    if (cur && cur.kind !== 'pre') nextAlarm();
+  });
   $('alarmAct').addEventListener('click', e => {
     e.stopPropagation(); unlock();
     const s = cur && S.samples.find(x => x.id === cur.id);
@@ -501,7 +559,7 @@
     for (const s of S.samples) {
       if (s.phase === 'wait' && now >= s.nagAt) {
         s.nagAt = now + NAG_MS; changed = true;
-        if (!alarmTimer) chime();
+        if (!alarmTimer) heldFlash();
       }
     }
     if (S.pre) for (const s of S.samples) {
@@ -511,7 +569,7 @@
       }
     }
     const ls = lastStart(), cueAt = ls + S.cueSec * 1000;
-    if (S.cue && ls && S.cueFor !== ls && now >= cueAt) {
+    if (S.cue && !S.ended && ls && S.cueFor !== ls && now >= cueAt) {
       S.cueFor = ls; changed = true;              // once per start
       if (now - cueAt < CUE_WINDOW_MS) {
         const from = S.samples.find(s => s.start === ls);
@@ -546,6 +604,10 @@
       }
     }
     $('rowPre').style.opacity = S.mode === 2 ? 1 : 0.5;
+    const fin = $('btnFinish');
+    fin.hidden = !S.samples.length;
+    fin.classList.toggle('over', S.ended);
+    if (!fin.classList.contains('arm')) fin.textContent = S.ended ? '✓ 샘플링 끝 · 다음 샘플 알림 꺼짐' : '🏁 샘플링 끝';
     $('vPulses').textContent = S.pulses + '회';
     $('vCue').textContent = fmtDur(S.cueSec);
     $('tgCue').classList.toggle('on', S.cue);
@@ -664,18 +726,43 @@
 
   // two-tap confirm (window.confirm is unreliable in home-screen web apps)
   function armed(btn, fn) {
-    if (btn.classList.contains('arm')) { fn(); return; }
+    if (btn.classList.contains('arm')) { clearTimeout(btn._armT); btn.classList.remove('arm'); fn(); return; }
     const old = btn.textContent;
     btn.classList.add('arm'); btn.textContent = btn.textContent.length > 2 ? '한 번 더 누르면 실행' : '삭제?';
-    setTimeout(() => { if (btn.isConnected) { btn.classList.remove('arm'); btn.textContent = old; } }, 2500);
+    btn._armT = setTimeout(() => { if (btn.isConnected) { btn.classList.remove('arm'); btn.textContent = old; } }, 2500);
   }
+
+  // ---------- end of session ----------
+  function finishSession() {
+    S.ended = true; S.cueFor = lastStart();
+    hideCue(); save(); render();
+    const left = active().length;
+    $('partySub').innerHTML = `오늘 샘플 ${S.samples.length}개 어닐링` +
+      (left ? `<br>남은 ${left}개는 끝나면 알려 드릴게요` : '');
+    const box = $('confetti'); box.innerHTML = '';
+    const colors = ['#ff8a2a', '#ffd43b', '#3ccf8e', '#2ee6d6', '#6c8cff', '#ff4d4d', '#ffffff'];
+    for (let i = 0; i < 46; i++) {
+      const p = document.createElement('i');
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.animationDuration = (1.8 + Math.random() * 1.6) + 's';
+      p.style.animationDelay = Math.random() * 0.6 + 's';
+      box.appendChild(p);
+    }
+    $('party').classList.add('show');
+    fanfare();
+    clearTimeout(finishSession.t);
+    finishSession.t = setTimeout(() => $('party').classList.remove('show'), 6000);
+  }
+  $('party').onclick = () => $('party').classList.remove('show');
 
   // ---------- wiring ----------
   $('btnStart').onclick = startSample;
+  $('btnFinish').onclick = e => { if (!S.ended) { initAudio(); armed(e.currentTarget, finishSession); } };
   $('heroAct').onclick = () => { const s = active().find(s => s.phase === 'wait'); if (s) startPost(s); };
   $('btnClearDone').onclick = () => { S.samples = S.samples.filter(s => s.phase !== 'done'); save(); render(); };
   $('btnReset').onclick = e => armed(e.currentTarget, () => {
-    S.samples = []; S.counter = 0; queue.length = 0; hideAlarm(); save(); render();
+    S.samples = []; S.counter = 0; S.ended = false; queue.length = 0; hideAlarm(); hideCue(); save(); render();
     $('btnReset').classList.remove('arm'); $('btnReset').textContent = '전체 초기화';
   });
   for (const b of $('seg').children) b.onclick = () => { S.mode = +b.dataset.mode; save(); render(); };
@@ -727,6 +814,7 @@
 
   render();
   updatePills();
+  holdOrHide();          // a sample was already waiting for Post when the app reopened
   setInterval(tick, 250);
   setInterval(updatePills, 2000);
 })();
