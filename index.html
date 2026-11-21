@@ -261,6 +261,14 @@
     <div><div class="t">소리</div><div class="d">무음 스위치와 상관없이 재생 (iOS 17+)</div></div>
     <button class="toggle" id="tgSound"></button>
   </div>
+  <div class="set-row">
+    <div><div class="t">음성 안내</div><div class="d">"S1 어닐 끝" 처럼 말해 줌 · 듣는 음악은 그동안 작아짐</div></div>
+    <button class="toggle" id="tgVoice"></button>
+  </div>
+  <div class="set-row">
+    <div><div class="t">음악과 같이 쓰기</div><div class="d">켜면 앱이 음악을 멈추지 않고 그 위에 섞여 울림 · 대신 <b>무음 스위치를 따름</b></div></div>
+    <button class="toggle" id="tgMix"></button>
+  </div>
   <button class="test" id="btnTest">완료 알람 테스트</button>
   <button class="test" id="btnTestCue" style="background: var(--cue)">휘파람 테스트</button>
   <div class="note">
@@ -295,7 +303,7 @@
 
 <script>
 (() => {
-  const APP_VERSION = '2026.11.20-3';   // bump on every deploy: the app compares it with the live copy
+  const APP_VERSION = '2026.11.21-1';   // bump on every deploy: the app compares it with the live copy
   const KEY = 'annealTimer.v1';
   const PULSE_MS = 2200;          // one strong pulse (flash + beeps) per this period
   const SOON_MS = 60 * 1000;
@@ -304,7 +312,7 @@
 
   // ---------- state ----------
   // sample.phase: 'pre' (2 step, 40 °C) -> 'wait' (pre done, waiting for confirm) -> 'post' -> 'done'
-  const defaults = { mode: 1, preSec: 180, postSec: 900, pulses: 3, pre: true, sound: true, ended: false,
+  const defaults = { mode: 1, preSec: 180, postSec: 900, pulses: 3, pre: true, sound: true, voice: true, mix: false, ended: false,
                      cue: true, cueSec: 70, cueFor: 0, counter: 0, samples: [] };
   let S = load();
   function load() {
@@ -335,7 +343,9 @@
   // ---------- audio ----------
   let ctx = null;
   function initAudio() {
-    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+    // 'playback' ignores the silent switch but may pause the user's music; 'ambient' mixes on top of it
+    try { if (navigator.audioSession) navigator.audioSession.type = S.mix ? 'ambient' : 'playback'; } catch {}
+    voiceUnlock();
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) ctx = new AC();
@@ -396,6 +406,32 @@
     [[0, 523], [0.14, 659], [0.28, 784], [0.42, 1047, 0.4], [0.9, 784], [1.04, 1047, 0.7]]
       .forEach(([at, f, len = 0.12]) => { tone(at, len, f, 0.4, 'triangle'); tone(at, len, f * 2, 0.12, 'sine'); });
   }
+  // Spoken announcement. iOS lowers (ducks) other apps' music while speech plays,
+  // so this is what makes the alarm stand out over a song.
+  let voiceReady = false, koVoice = null;
+  function voiceUnlock() {      // iOS only lets speech start after one call inside a tap
+    if (voiceReady || !window.speechSynthesis) return;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); voiceReady = true; } catch {}
+  }
+  function pickVoice() {
+    if (koVoice || !window.speechSynthesis) return koVoice;
+    const vs = speechSynthesis.getVoices().filter(v => /^ko/i.test(v.lang));
+    koVoice = vs.find(v => /yuna|유나/i.test(v.name)) || vs[0] || null;
+    return koVoice;
+  }
+  function say(text, delay = 0) {
+    if (!S.sound || !S.voice || !window.speechSynthesis) return;
+    setTimeout(() => {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ko-KR'; u.rate = 1.0; u.volume = 1;
+        const v = pickVoice(); if (v) u.voice = v;
+        speechSynthesis.cancel(); speechSynthesis.speak(u);
+      } catch {}
+    }, delay);
+  }
+  // "S12" -> "에스 12" so it is not read letter by letter
+  const spoken = name => String(name).replace(/^S(\d+)$/i, '에스 $1');
   function ding() {
     if (!soundOk()) return;
     tone(0, 0.35, 988, 0.3, 'sine');
@@ -459,6 +495,7 @@
     $('cue').classList.add('show'); $('btnStart').classList.add('cueing');
     cueShownAt = Date.now();
     whistle();
+    say(`${spoken(nextName())} 준비하세요`, 2300);
   }
   function hideCue() {
     $('cue').classList.remove('show'); $('btnStart').classList.remove('cueing'); cueShownAt = 0;
@@ -511,6 +548,7 @@
   function heldFlash() {   // reminder pulse on the held screen
     const el = $('alarm');
     chime();
+    if (cur && cur.name) say(`${spoken(cur.name)}, 포스트로 옮겨 주세요`, 700);
     ['flash', 'flash2', 'flash'].forEach((c, i) => setTimeout(() => {
       el.classList.remove('flash', 'flash2'); el.classList.add(c);
     }, i * 160));
@@ -521,6 +559,8 @@
     if (alarmPulse >= S.pulses) { nextAlarm(); return; }   // done with this one -> next or hide
     alarmPulse++;
     cur.kind === 'pre' ? chime() : burst();
+    if (alarmPulse === 1 && cur.name)
+      say(cur.kind === 'pre' ? `${spoken(cur.name)}, 프리 끝. 포스트로 옮기세요` : `${spoken(cur.name)}, 어닐 끝`, 750);
     // strobe during the beeps, then dim
     const steps = ['flash', 'flash2', 'flash', 'flash2', 'flash'];
     steps.forEach((c, i) => setTimeout(() => {
@@ -619,6 +659,8 @@
     $('tgCue').classList.toggle('on', S.cue);
     $('tgPre').classList.toggle('on', S.pre);
     $('tgSound').classList.toggle('on', S.sound);
+    $('tgVoice').classList.toggle('on', S.voice);
+    $('tgMix').classList.toggle('on', S.mix);
 
     // list: waiting first, then by next event; done last (latest first)
     const list = $('list'); list.innerHTML = '';
@@ -758,6 +800,7 @@
     }
     $('party').classList.add('show');
     fanfare();
+    say('수고했어요', 1500);
     clearTimeout(finishSession.t);
     finishSession.t = setTimeout(() => $('party').classList.remove('show'), 6000);
   }
@@ -814,6 +857,8 @@
   $('btnTestCue').onclick = () => { initAudio(); openSheet(false); showCue('S1', Date.now() - S.cueSec * 1000); };
   $('tgPre').onclick = () => { S.pre = !S.pre; save(); render(); };
   $('tgSound').onclick = () => { S.sound = !S.sound; save(); render(); updatePills(); };
+  $('tgVoice').onclick = () => { S.voice = !S.voice; save(); render(); if (S.voice) { voiceUnlock(); say('음성 안내 켜짐'); } };
+  $('tgMix').onclick = () => { S.mix = !S.mix; save(); render(); initAudio(); };
   $('btnTest').onclick = () => { initAudio(); openSheet(false); enqueueAlarm({ kind: 'post', name: '테스트' }); };
 
   function unlock() { initAudio(); keepAwake(); $('unlock').style.display = 'none'; }
